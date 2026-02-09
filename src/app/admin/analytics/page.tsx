@@ -1,10 +1,10 @@
 "use client";
-
+//Welcome to admin analytics.....
 import { useState, useEffect } from 'react';
-import { 
-  BarChart3, 
-  TrendingUp, 
-  Users, 
+import {
+  BarChart3,
+  TrendingUp,
+  Users,
   Calendar,
   Award,
   Star,
@@ -14,27 +14,84 @@ import { analyticsAPI } from '@/lib/api';
 import { DashboardAnalytics } from '@/types/analytics';
 import { Skeleton } from '@/components/ui/skeleton';
 import { formatDate } from '@/lib/utils';
+function mapDashboardAnalytics(apiData: any): DashboardAnalytics {
+  return {
+    // ---- Overview ----
+    totalEvents: apiData.overview.totalEvents,
+    totalUsers: apiData.overview.totalUsers,
+    totalRsvps: apiData.overview.totalRSVPs,
+    totalAttendance: apiData.overview.totalAttendances,
+    // Backend doesn’t provide these yet - UPDATE: Now it does for rating!
+    totalCreditsDistributed: 0,
+    averageEventRating: apiData.overview.averageEventRating ?? 0,
+
+    // ---- Events by status ----
+    upcomingEvents: apiData.eventsByStatus.UPCOMING ?? 0,
+    ongoingEvents: apiData.eventsByStatus.ONGOING ?? 0,
+    completedEvents: apiData.eventsByStatus.COMPLETED ?? 0,
+
+    // ---- Top Events ----
+    topEvents: apiData.topEvents.map((e: any) => ({
+      id: e.id,
+      title: e.title,
+      attendanceCount: e.totalAttendance,
+      rating: e.rating ?? 0
+    })),
+
+    // ---- Recent Activity ----
+    recentActivity: apiData.recentEvents.map((e: any) => ({
+      type: "EVENT",
+      description: `${e.title} (${e.status})`,
+      timestamp: e.startDate
+    }))
+  };
+}
+
+
 
 export default function AdminAnalyticsPage() {
   const [analytics, setAnalytics] = useState<DashboardAnalytics | null>(null);
   const [loading, setLoading] = useState(true);
+  const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
+    setMounted(true);
     fetchAnalytics();
   }, []);
 
   const fetchAnalytics = async () => {
     try {
-      const response = await analyticsAPI.getAdminDashboard();
-      if (response.data?.success && response.data.data) {
-        setAnalytics(response.data.data as DashboardAnalytics);
-      }
+      setLoading(true);
+
+      const res = await analyticsAPI.getAdminDashboard();
+
+      console.log("RAW API DATA 👉", res.data.data);
+
+      const mappedAnalytics = mapDashboardAnalytics(res.data.data);
+
+      console.log("FINAL DASHBOARD DATA 👉", mappedAnalytics);
+
+      setAnalytics(mappedAnalytics);
     } catch (error) {
-      console.error('Error fetching analytics:', error);
+      console.error("Error fetching analytics:", error);
     } finally {
       setLoading(false);
     }
   };
+
+
+  if (!mounted) {
+    return (
+      <main className="min-h-screen bg-background p-4 md:p-6">
+        <div className="max-w-7xl mx-auto space-y-6">
+          <Skeleton className="h-10 w-64" />
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            {[1, 2, 3, 4].map(i => <Skeleton key={i} className="h-32 w-full" />)}
+          </div>
+        </div>
+      </main>
+    );
+  }
 
   return (
     <main className="min-h-screen bg-background p-4 md:p-6">
@@ -60,7 +117,7 @@ export default function AdminAnalyticsPage() {
           <MetricCard
             icon={<Calendar className="w-6 h-6 text-blue-500" />}
             title="Total Events"
-            value={analytics?.totalEvents.toString() || '0'}
+            value={(analytics?.totalEvents ?? 0).toString()}
             subtitle={`${analytics?.upcomingEvents || 0} upcoming`}
             loading={loading}
             color="bg-blue-50 dark:bg-blue-950/20"
@@ -68,7 +125,7 @@ export default function AdminAnalyticsPage() {
           <MetricCard
             icon={<Users className="w-6 h-6 text-green-500" />}
             title="Total Students"
-            value={analytics?.totalUsers.toString() || '0'}
+            value={(analytics?.totalUsers ?? 0).toString()}
             subtitle={`${analytics?.totalRsvps || 0} RSVPs`}
             loading={loading}
             color="bg-green-50 dark:bg-green-950/20"
@@ -76,16 +133,18 @@ export default function AdminAnalyticsPage() {
           <MetricCard
             icon={<Award className="w-6 h-6 text-yellow-500" />}
             title="Credits Distributed"
-            value={analytics?.totalCreditsDistributed.toString() || '0'}
+            value={(analytics?.totalCreditsDistributed ?? 0).toString()}
             subtitle={`${analytics?.totalAttendance || 0} attendances`}
             loading={loading}
             color="bg-yellow-50 dark:bg-yellow-950/20"
           />
+
           <MetricCard
             icon={<Star className="w-6 h-6 text-purple-500" />}
             title="Average Rating"
-            value={analytics?.averageEventRating.toFixed(1) || '0.0'}
-            subtitle="Event satisfaction"
+            value={(analytics?.averageEventRating ?? 0).toString()}
+            // averageRating: apiData.reviews?.averageRating ?? apiData.averageRating ?? 0,
+            subtitle="Overall event rating"
             loading={loading}
             color="bg-purple-50 dark:bg-purple-950/20"
           />
@@ -148,7 +207,7 @@ export default function AdminAnalyticsPage() {
             <TrendingUp className="w-5 h-5 text-primary" />
             <h3 className="text-xl font-semibold">Top Performing Events</h3>
           </div>
-          
+
           {loading ? (
             <div className="space-y-4">
               {[1, 2, 3].map(i => (
@@ -162,12 +221,11 @@ export default function AdminAnalyticsPage() {
                   key={event.id}
                   className="flex items-center gap-4 p-4 rounded-lg bg-accent/50 hover:bg-accent transition-colors"
                 >
-                  <div className={`flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center font-bold ${
-                    index === 0 ? 'bg-yellow-400 text-yellow-900' :
+                  <div className={`flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center font-bold ${index === 0 ? 'bg-yellow-400 text-yellow-900' :
                     index === 1 ? 'bg-gray-300 text-gray-900' :
-                    index === 2 ? 'bg-orange-400 text-orange-900' :
-                    'bg-blue-100 text-blue-900'
-                  }`}>
+                      index === 2 ? 'bg-orange-400 text-orange-900' :
+                        'bg-blue-100 text-blue-900'
+                    }`}>
                     {index + 1}
                   </div>
                   <div className="flex-1 min-w-0">
@@ -181,7 +239,7 @@ export default function AdminAnalyticsPage() {
                   <div className="flex items-center gap-1">
                     <Star className="w-4 h-4 text-yellow-500 fill-yellow-500" />
                     <span className="font-semibold text-foreground">
-                      {event.rating.toFixed(1)}
+                      {event.rating?.toFixed(1) || '0.0'}
                     </span>
                   </div>
                 </div>
@@ -200,7 +258,7 @@ export default function AdminAnalyticsPage() {
             <Activity className="w-5 h-5 text-primary" />
             <h3 className="text-xl font-semibold">Recent Activity</h3>
           </div>
-          
+
           {loading ? (
             <div className="space-y-3">
               {[1, 2, 3, 4, 5].map(i => (
